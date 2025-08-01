@@ -10,8 +10,7 @@ Upload an **`ig_posts_raw_mini.csv`**-style file and the app will:
 """
 
 import re
-from io import BytesIO
-from pathlib import Path
+from typing import List, Dict
 
 import pandas as pd
 import streamlit as st
@@ -34,14 +33,14 @@ st.markdown(
 # Regex capturing typical sentence-ending punctuation, including Instagram ellipses (…)
 _SENTENCE_END_RE = re.compile(r"([.!?…])+")
 
-def instagram_sentence_tokenize(text: str) -> list[str]:
+def instagram_sentence_tokenize(text: str) -> List[str]:
     """Split a caption into sentences while respecting emojis/ellipses quirks."""
     text = re.sub(r"\s+", " ", str(text).strip())  # normalize whitespace
     if not text:
         return []
 
     parts = _SENTENCE_END_RE.split(text)
-    sentences: list[str] = []
+    sentences: List[str] = []
     for i in range(0, len(parts), 2):
         sentence = parts[i]
         if i + 1 < len(parts):
@@ -62,4 +61,23 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(f"Input CSV missing required column(s): {missing}")
 
     # Rename to desired schema
-    df =
+    df = df.rename(columns={"shortcode": "ID", "caption": "Context"})
+
+    records: List[Dict] = []
+    for _, row in df.iterrows():
+        post_id = row["ID"]
+        context = str(row["Context"])
+        sentences = instagram_sentence_tokenize(context)
+        for sent_idx, sentence in enumerate(sentences, start=1):
+            records.append({
+                "ID": post_id,
+                "Context": context,
+                "Statement": sentence,
+                "Sentence ID": sent_idx,
+            })
+
+    return pd.DataFrame(records)
+
+# ----------  SIDEBAR OPTIONS  ---------- #
+st.sidebar.header("⚙️ Options")
+max_rows = st.sidebar.slider("Max rows to display", 10, 500, 100, step=10)
